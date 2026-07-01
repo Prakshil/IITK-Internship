@@ -1,0 +1,97 @@
+# --- Large Data & Checkpoints ---
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.onnx
+*.h5
+*.hdf5
+
+# ---- Dataset files ---
+dataset_*.pkl
+pyg_*.pkl
+
+# ---- Model checkpoints ---
+gin_*.pt
+gin_*.pth
+rl_model_*.pt
+rf_model.*
+dt_model.*
+
+# ---- Evaluation results ---
+df_eval.pkl
+tabular_split.pkl
+benchmark_*.csv
+
+# --- Python cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+
+# --- Notebook checkpoints ---
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# --- VS Code ---
+.vscode/
+.vscode/settings.json
+.vscode/launch.json
+
+# --- Environment ---
+venv/
+.venv/
+env/
+.env
+*.env.local
+conda_env/
+env.yml
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# --- IDE files ---
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+
+# --- Jupyter ---
+/.jupyter/
+jupyter_notebook_config.py
+
+# --- Temp / Logs ---
+logs/
+*.log
+tmp/
+temp/
+*.bak
+*.tmp
+
+# --- Visualization outputs ---
+*.svg
+*.png
+*.jpg
+*.jpeg
+!figures/*.png
+dtreeviz_*.svg
+
+# --- PDF / HTML docs (generated) ---
+*.pdf
+*.html
+!ArithCircuit_Pipeline_Documentation.html
+
+# --- Large misc ---
+nohup.out
+core.*
+*.npy
+*.npz
