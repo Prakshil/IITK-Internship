@@ -204,9 +204,9 @@ class GINRewriteRanker(nn.Module):
         ea = data.edge_attr if hasattr(data, "edge_attr") and data.edge_attr is not None else None
         node_logits, rule_logits, conf = self(data.x, data.edge_index, edge_attr=ea)
 
-        node_p = torch.sigmoid(node_logits).squeeze(-1).cpu().numpy()
-        rule_p = torch.softmax(rule_logits, dim=-1).cpu().numpy()
-        conf_p = torch.sigmoid(conf).squeeze(-1).cpu().numpy()
+        node_p = torch.sigmoid(node_logits).squeeze(-1).detach().cpu().numpy()
+        rule_p = torch.softmax(rule_logits, dim=-1).detach().cpu().numpy()
+        conf_p = torch.sigmoid(conf).squeeze(-1).detach().cpu().numpy()
 
         ranked = []
         for c in candidates:
