@@ -1,0 +1,15 @@
+family,mean_reduction,median_reduction,std_reduction,min_reduction,max_reduction,n_iters_mean,depth_reduction_mean
+cse_heavy,31.17,29.63,3.90,0.00,39.02,1.00,0.96
+depth3_circuit,24.29,24.29,0.00,24.29,24.29,1.00,1.00
+depth3_factored,29.63,29.63,0.00,29.63,29.63,1.00,1.00
+depth3_mul_sum,29.07,29.07,0.00,29.07,29.07,1.00,1.00
+multi_step_chain,31.53,36.46,7.27,0.00,43.90,1.00,0.94
+distrib_recovery,13.41,13.41,0.00,13.41,13.41,2.00,1.00
+factorization_heavy,3.80,3.80,0.00,3.80,3.80,1.00,1.00
+depth_reduction_target,13.34,6.33,8.87,0.00,42.31,1.00,0.39
+common_factor_target,9.33,9.33,0.00,9.33,9.33,1.00,1.00
+depth3_reassoc,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+depth_heavy,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+reassoc_heavy,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+reassoc_target,0.00,0.00,0.00,0.00,0.00,0.00,0.00
+const_fold_target,0.00,0.00,0.00,0.00,0.00,0.00,0.00
