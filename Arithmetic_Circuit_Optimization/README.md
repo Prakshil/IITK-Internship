@@ -73,12 +73,12 @@ The pipeline runs on **PyTorch 1.14.0a0+410ce96** with CUDA 11.8 support, traine
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
-| `DATASET_TOTAL` | 25,000 | Number of training expressions |
+| `DATASET_TOTAL` | 100,000 | Number of training expressions |
 | `N_EPOCHS` | 15 | GIN training epochs |
 | `N_FEATURES` | 20 | Node feature dimensions |
 | `GIN_TOP_K` | 10 | Top-K candidates from GIN ranking |
 | `BEAM_WIDTH` | 8 | Beam search width |
-| `N_RULES` | 10 | Number of rewrite rules |
+| `N_RULES` | 8 | Number of trainable rewrite rules (identity + dead_pruning excluded) |
 | `EDGE_FEAT_DIM` | 5 | Edge feature dimensions |
 
 ### Cost Weight Profiles
@@ -95,7 +95,7 @@ The default **depth-first** profile emphasizes depth reduction (λ_D = 0.50), ta
 
 ## 2. Phase 0: Dataset Generation
 
-Generates **25,000 arithmetic expressions** across **14 families**, filtered to depth-3 circuits.
+Generates **100,000 arithmetic expressions** across **14 families**, filtered to depth-3 circuits.
 
 ### Expression Families
 
@@ -140,7 +140,7 @@ Each record stores: `{expr, family, n_vars, degree, size, dag_size, shared_count
 | reassoc_heavy | 7.00 | 4.0 | 8.00 |
 | reassoc_target | 7.00 | 2.0 | 8.00 |
 
-**Checkpoint:** `dataset_25k_depth3.pkl` — set `RESUME=True` to skip regeneration.
+**Checkpoint:** `dataset_100000_depth3.pkl` — set `RESUME=True` to skip regeneration.
 
 ---
 
@@ -299,7 +299,7 @@ Input: Node Features (N × 20) + Edge Features (E × 5)
   ↓
 GINEConv ×3 → Hidden (N × 128)
   ├── Node Head → Reducibility Logit (N × 1) — which nodes are worth rewriting?
-  ├── Rule Head → Rule Logits (N × 10) — which rule applies at each node?
+  ├── Rule Head → Rule Logits (N × 8) — which rule applies at each node?
   └── Conf Head → Confidence Logit (N × 1) — how much improvement is expected?
 ```
 
@@ -309,11 +309,11 @@ GINEConv ×3 → Hidden (N × 128)
 
 | Metric | Value |
 |--------|-------|
-| Total Parameters | 109,572 |
+| Total Parameters | 109,442 |
 | GINEConv Layers | 3 |
 | Hidden Dimension | 128 |
 | Dropout | 0.2 |
-| Training Samples | 126,211 |
+| Training Samples | 631,073 |
 | Epochs | 15 |
 
 ### Loss Function
@@ -493,11 +493,11 @@ Running the full pipeline on **500 held-out expressions** (6 worker threads):
 
 | Metric | Value |
 |--------|-------|
-| Mean % Reduction | 17.27% |
-| Median % Reduction | **24.29%** |
-| Std % Reduction | 13.75% |
-| Max % Reduction | 36.46% |
-| Per Expression | 7.55s |
+| Mean % Reduction | 14.67% |
+| Median % Reduction | **13.41%** |
+| Std % Reduction | 12.95% |
+| Max % Reduction | 43.90% |
+| Per Expression | 0.74s |
 | Success Rate | **100%** |
 
 ### Benchmark by Family
@@ -519,7 +519,7 @@ Running the full pipeline on **500 held-out expressions** (6 worker threads):
 | reassoc_heavy | 0.00% | 0.00% | 0.00 |
 | reassoc_target | 0.00% | 0.00% | 0.00 |
 
-**Benchmark completed in 3,773s (62.9 min) | Speedup: ~6.0× with ThreadPool**
+**Benchmark completed in ~370s | Speedup: ~10× with ThreadPoolExecutor**
 
 ---
 
@@ -527,8 +527,8 @@ Running the full pipeline on **500 held-out expressions** (6 worker threads):
 
 | File / Directory | Purpose |
 |-----------------|---------|
-| `ArithCircuit_Pipeline.ipynb` | Main pipeline notebook (all 12 phases + code) |
-| `data/` | Contains datasets, generated trees, benchmarks (`dataset_25k_depth3.pkl`, `pyg_data_list.pkl`, `df_eval.pkl`, etc.) |
+| `ArithCircuit_Pipeline.ipynb` | Main pipeline notebook (all 14 phases + code) |
+| `data/` | Contains datasets, generated trees, benchmarks (`dataset_100000_depth3.pkl`, `pyg_data_list.pkl`, `df_eval.pkl`, etc.) |
 | `models/` | Saved weights for GINEConv models, Random Forest, and Decision Tree baselines (`gin_latest.pt`, `rf_model.joblib`, etc.) |
 | `graphs/` | Exported plots, DAG visualizations, ablation charts, and training metric graphs |
 
@@ -554,7 +554,7 @@ Running the full pipeline on **500 held-out expressions** (6 worker threads):
 
 ## 17. Results Summary
 
-- **State-of-the-Art (SOTA) Achievement:** The ML-guided pipeline achieves a highly robust average of **17.27% structural node reduction** (median 24.29%) across diverse, complex expression families. Given the NP-hard nature of optimal algebraic factorization, achieving up to **36.5% depth/size reduction** via a direct 8-step GNN policy beam search without degradation marks a SOTA research milestone.
+- **State-of-the-Art (SOTA) Achievement:** The ML-guided pipeline achieves a highly robust average of **14.67% structural node reduction** (median 13.41%) across diverse, complex expression families, with a maximum reduction of **43.90%**. Given the NP-hard nature of optimal algebraic factorization, achieving this via a direct GNN policy beam search without algebraic degradation marks a strong research milestone.
 - **Robust Equivalence Guarantee:** Achieved **0% hallucination rate** (100% exact correctness) courtesy of the strict multi-phase PIT (Schwartz-Zippel) and SymPy filtering pipeline.
 - **Best performing families:** multi_step_chain (36.46%), cse_heavy (29.85%), factorization_heavy (29.68%) — all benefit from CSE and factorization rules.
 - **No improvement families:** const_fold_target, depth3_reassoc, depth_heavy, depth_reduction_target, reassoc_heavy, reassoc_target — these are already minimal or have no applicable rewrite.
