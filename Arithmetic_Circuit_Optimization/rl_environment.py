@@ -524,6 +524,54 @@ class GINRewriteRanker(nn.Module):
             raise ValueError(f"node_id {node_id} not found in node_list")
         return nl.index(node_id)
 
+    def train_action_batch(self, batch, optimizer, alpha=1.0, beta=1.0, gamma=0.5,
+                           rule_weights=None, focal_gamma=2.0, use_focal=False):
+        """Action-level loss for REINFORCE/supervised training."""
+        self.train()
+        device = next(self.parameters()).device
+        batch = batch.to(device)
+        ea = batch.edge_attr if hasattr(batch, "edge_attr") and batch.edge_attr is not None else None
+        node_logits, rule_logits, conf = self(batch.x, batch.edge_index, batch.batch, ea)
+
+        t_nodes = self._global_target_nodes(batch)
+        t_rules = batch.target_rule.to(device).long().view(-1)
+        timprov = batch.improvement.to(device).float().view(-1)
+
+        # Node loss: BCE on reducibility
+        node_sel = node_logits.view(-1)[t_nodes]
+        node_lbl = batch.node_reducible.float().view(-1) if hasattr(batch, "node_reducible") else timprov.clamp(0, 1)
+        loss_node = F.binary_cross_entropy_with_logits(node_sel, node_lbl)
+
+        # Rule loss: CE with optional focal
+        rule_rows = rule_logits[t_nodes]
+        if rule_weights is None:
+            rule_counts = torch.bincount(t_rules, minlength=N_RULES).float().clamp(min=1)
+            rule_weights = (1.0 / rule_counts)
+            rule_weights = rule_weights / rule_weights.sum() * N_RULES
+            rule_weights = rule_weights.to(rule_rows.device)
+
+        if use_focal:
+            ce_loss = F.cross_entropy(rule_rows, t_rules, weight=rule_weights, reduction='none')
+            pt = torch.exp(-ce_loss)
+            loss_rule = ((1 - pt) ** focal_gamma * ce_loss).mean()
+        else:
+            loss_rule = F.cross_entropy(rule_rows, t_rules, weight=rule_weights)
+
+        # Confidence loss: Huber on improvement
+        conf_sel = conf.view(-1)[t_nodes]
+        loss_conf = F.huber_loss(torch.sigmoid(conf_sel), timprov)
+
+        loss = alpha * loss_node + beta * loss_rule + gamma * loss_conf
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        return {
+            "loss": loss.item(),
+            "loss_node": loss_node.item(),
+            "loss_rule": loss_rule.item(),
+            "loss_conf": loss_conf.item(),
+        }
+
 
 # ---------------------------------------------------------------------------
 # CandidateGenerator (standalone copy for rule application)
