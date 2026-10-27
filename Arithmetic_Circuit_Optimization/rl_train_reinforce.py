@@ -151,6 +151,11 @@ class REINFORCETrainer:
             import torch_geometric.data
             data = env.feature_extractor.to_pyg_data(state.G)
 
+            # Move data to device
+            data.x = data.x.to(self.device)
+            data.edge_index = data.edge_index.to(self.device)
+            data.edge_attr = data.edge_attr.to(self.device)
+
             # Forward pass through GIN (WITH grad tracking for policy gradient)
             node_logits, rule_logits, conf_logits = self.model(
                 data.x, data.edge_index, edge_attr=data.edge_attr)

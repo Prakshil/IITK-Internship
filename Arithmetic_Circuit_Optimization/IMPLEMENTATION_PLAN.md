@@ -448,7 +448,9 @@ Your RF/DT proxy is only ~48% accurate — too weak to explain the GIN black box
 | Phase 1.3 | Re-balanced loss + retrain | PASS | retrain_gin_fixed_v2.py | Model retrained, val loss 2.4915 |
 | Phase 1.5 | Re-run benchmark | PASS | rebenchmark_fixed.py, data/benchmark_retrained.csv | Mean +1.70pp, zero-families 8→4 |
 | Phase 2.1 | Define RL Environment | PASS | rl_environment.py | Self-test + comprehensive test with trained model passed |
-| Phase 2.2 | Implement PPO or REINFORCE | PASS | rl_train_reinforce.py | Smoke test passed (3 episodes, gradients flow, model updates) |
+| Phase 2.2 | Implement PPO or REINFORCE | PASS | rl_train_reinforce.py | Smoke test + full training passed (100 episodes, best return 3.59) |
+| Phase 2.3 | Training loop | PASS | rl_train_reinforce.py | 100 episodes completed, model saved to gin_rl_finetuned.pt |
+| Phase 2.4 | Evaluation | IN PROGRESS | — | — |
 | Phase 2.3 | Training loop | PENDING | — | — |
 | Phase 2.4 | Evaluation | PENDING | — | — |
 
