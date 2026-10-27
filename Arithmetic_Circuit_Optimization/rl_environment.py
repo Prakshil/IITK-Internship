@@ -129,7 +129,12 @@ class ExprNormalizer:
                 return sp.Integer(int(v)) if v == int(v) else sp.Float(v)
             except Exception:
                 return e
-        return e.func(*[ExprNormalizer.normalize_for_cost(a) for a in e.args]) if e.args else e
+        # Preserve evaluate=False for Add/Mul/Pow to keep tree structure
+        kwargs = {}
+        if isinstance(e, (sp.Add, sp.Mul, sp.Pow)):
+            kwargs["evaluate"] = False
+        return e.func(*[ExprNormalizer.normalize_for_cost(a) for a in e.args],
+                      **kwargs) if e.args else e
 
 
 class CostModel:
