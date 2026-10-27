@@ -451,9 +451,9 @@ Your RF/DT proxy is only ~48% accurate — too weak to explain the GIN black box
 | Phase 2.2 | Implement PPO or REINFORCE | PASS | rl_train_reinforce.py | Smoke test + full training passed (100 episodes, best return 3.59) |
 | Phase 2.3 | Training loop | PASS | rl_train_reinforce.py | 100 episodes completed, model saved to gin_rl_finetuned.pt |
 | Phase 2.4 | Evaluation | PASS | data/benchmark_rl_finetuned.csv | No improvement (negative result, publishable) |
-| Phase 3.1 | Generate Optimal Minimal Expressions | PENDING | — | — |
-| Phase 3.2 | Reverse Rule Application | PENDING | — | — |
-| Phase 3.3 | Train GIN to Reverse | PENDING | — | — |
+| Phase 3.1 | Generate Optimal Minimal Expressions | PASS | self_supervised.py | 5 rules work (factorization, common_factor, depth_reduction, collection, cse_rewrite); distribution/reassociation/const_folding produce 0 |
+| Phase 3.2 | Reverse Rule Application | PASS | self_supervised.py | Reverse rules implemented for all 8; 5 produce valid data |
+| Phase 3.3 | Train GIN to Reverse | IN PROGRESS | train_self_supervised.py | Full training running: 5K/rule self-supervised + 50K supervised |
 | Phase 3.4 | Compare Training Strategies | PENDING | — | — |
 | Phase 3.5 | Start PIT Theoretical Draft | PENDING | — | — |
 
