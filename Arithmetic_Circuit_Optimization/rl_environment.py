@@ -386,6 +386,33 @@ class FeatureExtractor:
             edge_attr = np.empty((0, 5), dtype=np.float32)
         return node_list, X, edge_index, edge_attr
 
+    def to_pyg_data(self, G, target_node=None, target_rule=None, improvement=None,
+                    node_reducible=None, confidence=None, in_top_k=None):
+        """Convert DAG to PyG Data object (standalone copy from notebook)."""
+        import torch_geometric.data
+        node_list, X, ei, ea = self.extract(G)
+        data = torch_geometric.data.Data(
+            x=torch.tensor(X, dtype=torch.float),
+            edge_index=torch.tensor(ei, dtype=torch.long),
+            edge_attr=torch.tensor(ea, dtype=torch.float),
+        )
+        data.node_list = node_list
+        if target_node is not None:
+            idx = 0 if target_node == GLOBAL_NODE_ID else (
+                node_list.index(target_node) if target_node in node_list else 0)
+            data.target_node = torch.tensor([idx], dtype=torch.long)
+        if target_rule is not None:
+            data.target_rule = torch.tensor([int(target_rule)], dtype=torch.long)
+        if improvement is not None:
+            data.improvement = torch.tensor([float(improvement)], dtype=torch.float)
+        if node_reducible is not None:
+            data.node_reducible = torch.tensor([float(node_reducible)], dtype=torch.float)
+        if confidence is not None:
+            data.confidence = torch.tensor([float(confidence)], dtype=torch.float)
+        if in_top_k is not None:
+            data.in_top_k = torch.tensor([float(in_top_k)], dtype=torch.float)
+        return data
+
 
 # ---------------------------------------------------------------------------
 # GINRewriteRanker (standalone copy for policy inference)
