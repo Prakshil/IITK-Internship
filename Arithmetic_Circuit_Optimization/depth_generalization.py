@@ -46,7 +46,10 @@ class DepthCircuitGenerator:
         self.rng = random.Random(seed)
         self.x, self.y, self.z, self.w, self.u, self.v = sp.symbols(
             "x y z w u v")
-        self.ALL_VARS = [self.x, self.y, self.z, self.w, self.u, self.v]
+        self.a, self.b, self.c, self.d, self.e, self.f = sp.symbols(
+            "a b c d e f")
+        self.ALL_VARS = [self.x, self.y, self.z, self.w, self.u, self.v,
+                         self.a, self.b, self.c, self.d, self.e, self.f]
 
     def _sample_vars(self, n):
         return self.rng.sample(self.ALL_VARS, min(n, len(self.ALL_VARS)))
