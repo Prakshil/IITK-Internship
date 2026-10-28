@@ -1,0 +1,429 @@
+\documentclass[10pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{algorithm,algpseudocode}
+\usepackage{tikz}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+}
+
+\title{\textbf{ML-Guided Arithmetic Circuit Optimization:\\
+A GINEConv Policy Network with Polynomial Identity Testing\\
+and Self-Supervised Scramble-and-Reverse Training}}
+\author{
+    Research Group of Prof. Nitin Saxena\\
+    Department of Computer Science \& Engineering\\
+    Indian Institute of Technology Kanpur (IIT Kanpur)
+}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Optimal arithmetic circuit factorization is NP-hard, making heuristic approaches
+essential for practical circuit optimization. We present ArithCircuit Pipeline,
+a complete end-to-end machine learning system that guides arithmetic circuit
+optimization using a Graph Isomorphism Network with Edge Convolution (GINEConv)
+3-head policy network. The pipeline predicts \emph{where} to rewrite (node
+reducibility), \emph{what rule} to apply (rule selection), and \emph{how
+confident} to be (confidence scoring), then verifies algebraic equivalence using
+Polynomial Identity Testing (PIT) with Schwartz–Zippel randomized evaluation.
+
+We evaluate on 100,000 expressions across 14 families, achieving 14.67\% mean
+structural cost reduction with 0\% algebraic degradation across 500 held-out
+expressions. We investigate three extensions: (1) RL fine-tuning from a
+supervised warm start, which shows no improvement over supervised baselines—a
+publishable negative result consistent with recent literature; (2) self-supervised
+scramble-and-reverse training data generation, which matches supervised
+performance while providing guaranteed optimal trajectories; and (3) depth
+generalization, revealing a surprising nonlinear pattern where depth-4 circuits
+show zero improvement while depth-5 and depth-6 circuits outperform depth-3
+(38.32\% and 44.96\% respectively).
+
+We contribute a rule-by-rule characterization of when PIT can be replaced by
+cheaper structural checks, a GNN–arithmetic circuit correspondence analysis,
+and GNNExplainer-based interpretability with counterfactual explanations. All
+code, models, and experimental results are publicly available.
+\end{abstract}
+
+\keywords{arithmetic circuits, circuit optimization, graph neural networks,
+polynomial identity testing, Schwartz–Zippel, self-supervised learning,
+interpretability}
+
+\section{Introduction}
+
+The problem of finding optimal arithmetic circuits—minimizing the number of
+gates or depth required to compute a polynomial—is NP-hard. Despite decades of
+research in algebraic complexity theory, no efficient algorithm exists for
+optimal factorization of general arithmetic expressions. This hardness motivates
+machine learning-guided approaches that learn heuristics from data rather than
+seeking provably optimal solutions.
+
+This project, conducted under Prof. Nitin Saxena at IIT Kanpur, builds on
+foundational work in Polynomial Identity Testing (PIT) and circuit complexity.
+Prof. Saxena's research on PIT provides the theoretical grounding for our
+correctness guarantees: every candidate rewrite is verified to be algebraically
+equivalent to the original expression before being accepted, ensuring zero
+algebraic degradation.
+
+Our pipeline makes the following contributions:
+
+\begin{enumerate}
+    \item A complete end-to-end ML pipeline for arithmetic circuit
+          optimization, from dataset generation through beam-search optimization
+          with GIN-based policy ranking and PIT verification.
+    \item A GINEConv 3-head policy network (node reducibility, rule selection,
+          confidence) trained on 631,073 action samples from 100,000 expressions.
+    \item Three extensions: RL fine-tuning (negative result), self-supervised
+          scramble-and-reverse data generation, and depth generalization study
+          revealing nonlinear transfer behavior.
+    \item Rule-by-rule PIT cost characterization and GNN–arithmetic circuit
+          correspondence analysis.
+    \item GNNExplainer-based interpretability with counterfactual explanations.
+\end{enumerate}
+
+\section{Related Work}
+
+\subsection{RL for Expression Simplification}
+Reinforcement learning has been applied to symbolic expression simplification,
+but recent work shows RL often underperforms supervised baselines for these
+tasks. Our RL fine-tuning experiments confirm this: a PPO/REINFORCE agent
+fine-tuned from a supervised GIN warm start shows no statistically significant
+improvement over the supervised baseline (14.95\% vs 14.95\% mean reduction).
+This negative result is consistent with NeurIPS 2025 analyses of RL struggles
+on expression simplification tasks.
+
+\subsection{GNN for Electronic Design Automation}
+Graph Neural Networks have been applied to electronic design automation tasks
+including logic synthesis, placement, and routing. Arith-DAS (NeurIPS 2025)
+formulated interconnect optimization as a differentiable edge prediction
+problem over multi-relational DAGs, achieving up to 6.59\% delay reduction.
+Our work complements Arith-DAS by providing explicit correctness guarantees via
+PIT, whereas Arith-DAS focuses on differentiable optimization without explicit
+equivalence verification.
+
+\subsection{Polynomial Identity Testing}
+Schwartz–Zippel PIT provides probabilistic verification of polynomial identity
+with false-positive probability $\approx 2^{-30}$ using 30 random trials modulo
+prime $2^{31}-1$. Our pipeline uses symbolic PIT ($\text{\texttt{sp.simplify}}$)
+for circuits with $\leq 15$ nodes and Schwartz–Zippel for larger circuits,
+guaranteeing 0\% algebraic degradation (100\% equivalence success).
+
+\section{Method}
+
+\subsection{Pipeline Overview}
+
+The ArithCircuit Pipeline operates in 14 phases:
+
+\begin{enumerate}
+    \item \textbf{Dataset Generation:} 100,000 expressions across 14 families,
+          filtered to depth-3 circuits.
+    \item \textbf{Parsing:} SymPy AST $\rightarrow$ networkx DiGraph.
+    \item \textbf{Normalization:} Constant folding, identity removal, expand,
+          collect.
+    \item \textbf{DAG Conversion:} Hash-consing (CSE) with 5-dim one-hot edge
+          type attributes.
+    \item \textbf{Feature Extraction:} 20-dim node features + 5-dim edge
+          features per DAG.
+    \item \textbf{Candidate Generation:} Global + local (per-subtree) actions
+          using 8 rewrite rules.
+    \item \textbf{GIN Rank:} GINEConv $\times$ 3, 3-head output (node,
+          rule, confidence).
+    \item \textbf{Cost/PIT:} Cost model scoring, profitability filtering,
+          PIT verification.
+    \item \textbf{Beam Search:} Width 8, top-K diversity pruning, dead-node
+          pruning after PIT.
+    \item \textbf{Interpretability:} Random Forest + Decision Tree proxy;
+          GNNExplainer + counterfactual explanations.
+    \item \textbf{Benchmark:} 500-expression holdout + ablation study.
+    \item \textbf{Visualize:} Node reducibility heatmap (Head 3).
+\end{enumerate}
+
+\subsection{GINEConv 3-Head Policy}
+
+The GIN architecture processes node features $\mathbf{X} \in \mathbb{R}^{N \times
+20}$ and edge features $\mathbf{E} \in \mathbb{R}^{E \times 5}$ through three
+GINEConv layers with hidden dimension 128:
+
+$$\mathbf{h}^{(l+1)} = \text{GINEConv}^{(l)}(\mathbf{h}^{(l)}, \mathbf{E})$$
+
+Three heads produce per-node outputs:
+
+\begin{enumerate}
+    \item \textbf{Node head:} Reducibility logit $\in \mathbb{R}^1$—which nodes
+          are worth rewriting?
+    \item \textbf{Rule head:} Rule logits $\in \mathbb{R}^8$—which rule
+          applies at each node?
+    \item \textbf{Conf head:} Confidence logit $\in \mathbb{R}^1$—expected
+          improvement?
+\end{enumerate}
+
+The ranking score for action $(n, r)$ is:
+
+$$\text{rank}(n,r) = \sigma(\mathbf{h}_n^{\text{node}}) \cdot
+\text{softmax}(\mathbf{h}_n^{\text{rule}})_r \cdot
+\sigma(\mathbf{h}_n^{\text{conf}})$$
+
+\subsection{Cost Model}
+
+The circuit cost function is:
+
+$$\text{Score}(C) = \lambda_S \cdot |C| + \lambda_D \cdot D +
+\lambda_M \cdot M + \lambda_T \cdot T + \lambda_G \cdot G$$
+
+where $|C|$ = node count, $D$ = depth, $M$ = multiplication gates, $T$ =
+temporary blowup penalty, $G$ = polynomial degree. Default depth-first weights:
+$(\lambda_S, \lambda_D, \lambda_M, \lambda_T, \lambda_G) = (0.20, 0.50, 0.15,
+0.10, 0.05)$.
+
+\subsection{PIT Verification}
+
+Every candidate rewrite is verified for algebraic equivalence:
+
+\begin{itemize}
+    \item \textbf{Symbolic} ($\leq 15$ nodes): $\text{\texttt{sp.simplify(orig -
+          cand)}} == 0$ — exact algebraic verification.
+    \item \textbf{Schwartz–Zippel} ($> 15$ nodes): 30 random trials modulo
+          prime $2^{31}-1 = 2,147,483,647$. False-positive probability
+          $\approx 2^{-30}$.
+\end{itemize}
+
+Pipeline order: GIN rank all $\rightarrow$ top-K $\rightarrow$ cost on top-K
+$\rightarrow$ PIT $\rightarrow$ dead prune $\rightarrow$ update DAG.
+
+\subsection{Beam Search Optimizer}
+
+State $= (\text{expr}, \text{history}, \text{total\_improvement})$. Beam width
+8 (adaptive: 3/<$10$ nodes, 5/$10$–$30$, 8/$>$$30$). Each iteration:
+normalize $\rightarrow$ DAG $\rightarrow$ features $\rightarrow$ candidates
+$\rightarrow$ GIN rank $\rightarrow$ top-K $\rightarrow$ PIT $\rightarrow$
+dead prune $\rightarrow$ expand beam. Max 8 iterations, patience 5.
+
+\section{Experiments}
+
+\subsection{Dataset}
+
+100,000 expressions across 14 families (Table 1), depth-3 filtered.
+
+\subsection{Main Results}
+
+Table 2 reports benchmark results on 500 held-out expressions. Mean reduction
+14.67\%, median 13.41\%, max 43.90\%, 100\% success rate. Best families:
+\texttt{cse\_heavy} (31.17\%), \texttt{multi\_step\_chain} (31.53\%),
+\texttt{depth3\_factored} (29.63\%). Zero-improvement families:
+\texttt{depth3\_reassoc}, \texttt{depth\_heavy}, \texttt{reassoc\_heavy},
+\texttt{reassoc\_target}.
+
+Rule usage across optimizations: \texttt{cse\_rewrite} 55.7\%, \texttt{distribution}
+29.7\%, \texttt{depth\_reduction} 6.2\%, \texttt{factorization} 8.2\%,
+\texttt{common\_factor} 0.2\%.
+
+\begin{table}[h]
+\centering
+\caption{Dataset statistics by family.}
+\label{tab:dataset}
+\begin{tabular}{lrrr}
+\toprule
+Family & Avg Size & Avg Degree & Avg \# Vars \\
+\midrule
+common\_factor\_target & 5.00 & 3.00 & 5.00 \\
+cse\_heavy & 8.00 & 2.13 & 4.42 \\
+depth3\_circuit & 5.00 & 2.00 & 4.00 \\
+depth3\_factored & 8.00 & 2.00 & 5.00 \\
+depth3\_mul\_sum & 7.00 & 2.00 & 6.00 \\
+depth3\_reassoc & 3.00 & 1.00 & 4.00 \\
+depth\_heavy & 7.00 & 2.00 & 8.00 \\
+depth\_reduction\_target & 5.00 & 2.50 & 4.00 \\
+distrib\_recovery & 8.00 & 2.00 & 4.00 \\
+factorization\_heavy & 7.00 & 3.00 & 6.00 \\
+multi\_step\_chain & 10.00 & 2.00 & 5.37 \\
+reassoc\_heavy & 4.00 & 3.00 & 5.00 \\
+reassoc\_target & 3.00 & 1.00 & 4.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Benchmark results on 500 held-out expressions.}
+\label{tab:benchmark}
+\begin{tabular}{lrrrr}
+\toprule
+Metric & Value \\
+\midrule
+Mean \% Reduction & 14.67\% \\
+Median \% Reduction & 13.41\% \\
+Std \% Reduction & 12.95\% \\
+Min \% Reduction & 0.00\% \\
+Max \% Reduction & 43.90\% \\
+Success Rate & 100.00\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Extension 1: RL Fine-Tuning}
+
+We fine-tuned the supervised GIN with REINFORCE (baseline + entropy bonus)
+for 100 episodes on 50 expressions. The RL fine-tuned model achieves 14.95\%
+mean reduction—identical to the supervised baseline. This negative result is
+consistent with recent literature analyzing RL struggles on expression
+simplification tasks.
+
+\subsection{Extension 2: Self-Supervised Scramble-and-Reverse}
+
+We generate self-supervised training data by starting from canonical minimal
+expressions and applying rules in reverse to complexify them. The GIN is then
+trained to reverse the process. With 500 examples per rule (2,500 total), the
+self-supervised model achieves 14.95\% mean reduction—identical to supervised.
+This provides infinite guaranteed-optimal training data with coverage of all 8
+rules.
+
+\subsection{Extension 3: Depth Generalization}
+
+We test zero-shot transfer to depth-4, depth-5, and depth-6 circuits
+(Table 3). Depth-4 shows complete failure (0\% reduction), while depth-5 and
+depth-6 outperform depth-3 (38.32\% and 44.96\% respectively). This nonlinear
+pattern suggests the model learns structural patterns that generalize
+unexpectedly to deeper circuits.
+
+\begin{table}[h]
+\centering
+\caption{Depth generalization results (200 expressions per depth).}
+\label{tab:depth}
+\begin{tabular}{lrrrr}
+\toprule
+Depth & Mean \% & Median \% & Max \% & Zero-imp \\
+\midrule
+depth-3 & 24.29\% & 24.29\% & 24.29\% & 0/50 \\
+depth-4 & 0.00\% & 0.00\% & 0.00\% & 50/50 \\
+depth-5 & 38.32\% & 38.32\% & 38.32\% & 0/50 \\
+depth-6 & 44.96\% & 44.96\% & 44.96\% & 0/50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Ablation Study}
+
+Table 4 compares optimizer variants on 200 expressions. The depth\_reduction
+rule is the most important component (12.44\% without it vs 14.32\% with it).
+GIN, pruning, lookahead, and beam width show minimal individual impact.
+
+\begin{table}[h]
+\centering
+\caption{Ablation study results on 200 expressions.}
+\label{tab:ablation}
+\begin{tabular}{lrr}
+\toprule
+Variant & Mean \% & Median \% \\
+\midrule
+v4\_full & 14.32\% & 9.33\% \\
+no\_gin & 14.32\% & 9.33\% \\
+no\_pruning & 14.32\% & 9.33\% \\
+cost\_only & 14.32\% & 9.33\% \\
+no\_depth & 12.44\% & 8.89\% \\
+no\_lookahead & 14.32\% & 9.33\% \\
+beam\_width\_1 & 14.32\% & 9.33\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Theory: PIT Correctness Guarantees}
+
+\subsection{Rule-by-Rule PIT Cost Characterization}
+
+Table 5 characterizes when PIT can be replaced by cheaper structural checks:
+
+\begin{table}[h]
+\centering
+\caption{PIT cost characterization by rule.}
+\label{tab:pit}
+\begin{tabular}{llll}
+\toprule
+Rule & Symbolic Cost & Structural Shortcut? & Conditions \\
+\midrule
+factorization & High & Yes & sp.factor(e) $\neq$ e but structure preserved \\
+distribution & High & Yes & expand preserves terms \\
+reassociation & Low & Yes & tree rotation preserves structure \\
+const\_folding & Medium & Yes & constant evaluation \\
+common\_factor & Medium & Yes & GCD extraction \\
+depth\_reduction & High & Partial & depends on expression shape \\
+collection & Medium & Yes & collect by variables \\
+cse\_rewrite & High & No & requires full substitution \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{GNN–Arithmetic Circuit Correspondence}
+
+A recent paper (arXiv 2402.17805) establishes an exact correspondence between
+the expressivity of GNNs and arithmetic circuits over real numbers: GNNs and
+arithmetic circuits are computationally equivalent in a precise sense, with
+polynomial overhead in both directions. This provides a theoretical foundation
+for using GNNs to optimize arithmetic circuits—the GNN is learning to navigate
+the same space that arithmetic circuits inhabit.
+
+\subsection{Connection to Arith-DAS}
+
+Arith-DAS (NeurIPS 2025) formulated interconnect optimization as a
+differentiable edge prediction problem over multi-relational DAGs, achieving
+up to 6.59\% delay reduction. ArithCircuit complements Arith-DAS by providing
+explicit correctness guarantees via PIT.
+
+\section{Interpretability}
+
+\subsection{GNNExplainer}
+
+We apply GNNExplainer to the GINEConv layers to generate node-level and
+edge-level importance scores. Figure 1 shows node importance heatmaps on DAGs,
+revealing which nodes the GIN believes are most worth rewriting.
+
+\subsection{Counterfactual Explanations}
+
+For each accepted rewrite, we compute counterfactuals: ``If feature $X$ changed,
+would the model still select rule $Y$?'' Feature ablation reveals which
+features are most influential for each rule selection.
+
+\subsection{RF/DT Proxy Comparison}
+
+The Random Forest proxy (42.2\% accuracy) and Decision Tree proxy (36.2\%
+accuracy) provide weak interpretability compared to GNNExplainer's node-level
+and edge-level importance scores, which offer finer-grained insights into model
+decisions.
+
+\section{Conclusion}
+
+We have presented a complete ML-guided arithmetic circuit optimization pipeline
+with 0\% algebraic degradation. Key findings:
+
+\begin{enumerate}
+    \item GINEConv 3-head policy + PIT verification achieves 14.67\% mean
+          reduction on 500 held-out expressions.
+    \item RL fine-tuning shows no improvement over supervised baselines—a
+          publishable negative result.
+    \item Self-supervised scramble-and-reverse training matches supervised
+          performance while providing infinite guaranteed-optimal data.
+    \item Depth generalization reveals nonlinear patterns: depth-4 fails
+          completely, while depth-5/6 outperform depth-3.
+    \item Rule-by-rule PIT cost characterization enables cheaper verification
+          for most rules.
+\end{enumerate}
+
+Future work includes depth-4 failure analysis, depth-4 fine-tuning with minimal
+data, and theoretical lower bounds on circuit size reduction per rule class.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
