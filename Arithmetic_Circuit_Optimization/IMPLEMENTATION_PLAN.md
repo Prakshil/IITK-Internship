@@ -456,6 +456,12 @@ Your RF/DT proxy is only ~48% accurate — too weak to explain the GIN black box
 | Phase 3.3 | Train GIN to Reverse | PASS | train_self_supervised.py | Training complete: 22.5K samples, val loss 0.4426, model saved to gin_ss_finetuned.pt |
 | Phase 3.4 | Compare Training Strategies | PASS | rebenchmark_fixed.py | Self-supervised model: 14.95% mean (identical to supervised). All three approaches (supervised, RL, self-supervised) converge to same result |
 | Phase 3.5 | Start PIT Theoretical Draft | PASS | docs/pit_analysis.md | Complete theoretical PIT analysis |
+| Phase 4.1 | Generate Deeper Circuit Benchmark | PASS | depth_generalization.py | Depth-3/4/5/6 generators implemented |
+| Phase 4.2 | Zero-Shot Transfer Test | PASS | depth_generalization.py | depth-4: 0%, depth-5: 38.32%, depth-6: 44.96% |
+| Phase 4.3 | Fine-Tuning with Minimal Data | PENDING | — | — |
+| Phase 6.1 | GNNExplainer Integration | PENDING | — | — |
+| Phase 6.2 | Counterfactual Explanations | PENDING | — | — |
+| Phase 6.3 | Replace RF/DT Proxy | PENDING | — | — |
 
 ## Weekly Schedule Summary
 
