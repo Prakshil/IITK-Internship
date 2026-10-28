@@ -847,6 +847,176 @@ class CandidateGenerator:
 
 
 # ---------------------------------------------------------------------------
+# CircuitOptimizer (simplified for beam-search optimization)
+# ---------------------------------------------------------------------------
+
+import threading
+
+
+class CircuitOptimizer:
+    """Beam-search circuit optimizer using GIN ranking + PIT verification.
+
+    Simplified version of the notebook's CircuitOptimizer, adapted for
+    standalone use in depth generalization studies.
+    """
+
+    def __init__(self, model, max_iters=8, gin_top_k=10, beam_width=8,
+                 patience=5, mode="v4_full"):
+        self.model = model
+        self.max_iters = max_iters
+        self.gin_top_k = gin_top_k
+        self.beam_width = beam_width
+        self.patience = patience
+        self.mode = mode
+        self._norm = ExprNormalizer()
+        self._dag = DAGConverter()
+        self._feat = FeatureExtractor()
+        self._cgen = CandidateGenerator()
+        self._cost = CostModel()
+        self._pit = PITVerifier()
+        self._gin_lock = threading.Lock()
+
+    def score_for_mode(self, G, temp_blowup=0.0):
+        return self._cost.score_graph(G, temp_blowup=temp_blowup)
+
+    def _adaptive_beam_width(self, G):
+        n = G.number_of_nodes()
+        if n < 10:
+            w = 3
+        elif n < 30:
+            w = 5
+        else:
+            w = 8
+        return min(w, self.beam_width)
+
+    def optimize(self, expr, verbose=False):
+        """Optimize expression using beam search with GIN ranking + PIT.
+
+        Returns dict with orig_cost, final_cost, pct_reduction, etc.
+        """
+        best_expr = expr
+        try:
+            G0 = self._dag.convert(self._norm.normalize_for_cost(expr))
+            best_cost = self.score_for_mode(G0)
+        except Exception:
+            best_cost = float('inf')
+
+        path = []
+        states = [(expr, best_cost, best_cost, [])]
+        orig_cost = best_cost
+
+        for it in range(self.max_iters):
+            expanded = []
+
+            for e, cost, est_fut_cost, p in states:
+                try:
+                    ne = self._norm.normalize_for_cost(e)
+                    G = self._dag.convert(ne)
+                except Exception:
+                    continue
+
+                beam_width = self._adaptive_beam_width(G)
+
+                cands = self._cgen.generate_all_actions(ne, G)
+                if not cands:
+                    continue
+
+                if self.model is not None:
+                    data = self._feat.to_pyg_data(G)
+                    ranked_cands = []
+                    BATCH = 32
+                    for i in range(0, len(cands), BATCH):
+                        chunk = cands[i:i + BATCH]
+                        with self._gin_lock:
+                            res = self.model.rank_candidates(
+                                data, chunk, device=None)["ranked"]
+                        ranked_cands.extend(res)
+                    gin_ranked = ranked_cands
+                else:
+                    gin_ranked = cands
+
+                # Deduplicate
+                seen_exprs = set()
+                deduped = []
+                for c in gin_ranked:
+                    ce = str(c["candidate_expr"])
+                    if ce not in seen_exprs:
+                        seen_exprs.add(ce)
+                        deduped.append(c)
+                gin_topk = deduped[:self.gin_top_k]
+
+                for c in gin_topk:
+                    ne_cand = c["candidate_expr"]
+                    try:
+                        n_dag_nodes = G.number_of_nodes()
+                        if not self._pit.verify(ne, ne_cand, n_nodes=n_dag_nodes):
+                            continue
+                        Gp_cand = self._dag.convert(
+                            self._norm.normalize_for_cost(ne_cand))
+                        if Gp_cand.number_of_nodes() == 0:
+                            continue
+                        root_p = Gp_cand.graph.get("root")
+                        if root_p is not None and root_p in Gp_cand.nodes():
+                            ne_cand = Gp_cand.nodes[root_p].get("expr", ne_cand)
+                        c["candidate_graph"] = Gp_cand
+                        ncost = self.score_for_mode(Gp_cand)
+                        c["score_improvement"] = cost - ncost
+                    except Exception:
+                        continue
+
+                    predicted_gain = c.get("gin_rank_score",
+                                           c.get("score_improvement", 0))
+                    est_future_cost = ncost - (
+                        predicted_gain * max(abs(ncost), 1.0))
+
+                    npth = p + [c]
+                    expanded.append((ne_cand, ncost, est_future_cost, npth))
+
+                    if ncost < best_cost:
+                        best_cost = ncost
+                        best_expr = ne_cand
+                        path = npth
+
+            states = sorted(expanded, key=lambda t: t[2])[:beam_width]
+
+            if verbose:
+                print(f"  iter {it+1} | best_cost={best_cost:.2f} | path_len={len(path)}")
+
+            if len(expanded) == 0:
+                break
+
+        try:
+            final_G = self._dag.convert(self._norm.normalize_for_cost(best_expr))
+            final_m = self._cost.graph_metrics(final_G)
+        except Exception:
+            final_m = {"size": 0, "depth": 0}
+
+        try:
+            G0 = self._dag.convert(self._norm.normalize_for_cost(expr))
+            base_m = self._cost.graph_metrics(G0)
+        except Exception:
+            base_m = {"size": 0, "depth": 0}
+
+        return {
+            "expr": expr,
+            "optimized": best_expr,
+            "orig_cost": orig_cost,
+            "final_cost": best_cost,
+            "pct_reduction": 100.0 * (orig_cost - best_cost) / max(orig_cost, 1e-9),
+            "delta_score": orig_cost - best_cost,
+            "n_rewrites_accepted": len(path),
+            "n_iters": len(path),
+            "path": path,
+            "rewrite_sequence": [p.get("rule") for p in path],
+            "accepted_rules": [p.get("rule") for p in path],
+            "accepted_count": len(path),
+            "size_reduction_frac": (base_m["size"] - final_m["size"]) / max(base_m["size"], 1),
+            "depth_reduction": base_m["depth"] - final_m["depth"],
+            "pit_ok": True,
+        }
+
+
+# ---------------------------------------------------------------------------
 # RL State and Action data structures
 # ---------------------------------------------------------------------------
 
