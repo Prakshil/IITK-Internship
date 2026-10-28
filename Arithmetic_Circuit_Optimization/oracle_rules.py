@@ -27,6 +27,16 @@ RULE_NAMES = [
     "collection", "cse_rewrite",
 ]
 
+# Node feature names (20-dim)
+FEATURE_NAMES = [
+    "gate_var", "gate_const", "gate_add", "gate_mul", "gate_pow", "gate_other",
+    "depth_from_root", "fan_in", "fan_out_norm", "subtree_size_norm",
+    "is_shared",
+    "local_degree", "subtree_degree", "degree_to_output",
+    "depth_to_leaf", "op_density", "mul_ratio", "reuse_count",
+    "estimated_blowup", "parent_op_type",
+]
+
 
 def _rng_sample(rng, vars_list, n):
     """Sample n distinct variables from vars_list using rng."""

@@ -459,7 +459,7 @@ Your RF/DT proxy is only ~48% accurate — too weak to explain the GIN black box
 | Phase 4.1 | Generate Deeper Circuit Benchmark | PASS | depth_generalization.py | Depth-3/4/5/6 generators implemented |
 | Phase 4.2 | Zero-Shot Transfer Test | PASS | depth_generalization.py | depth-4: 0%, depth-5: 38.32%, depth-6: 44.96% |
 | Phase 4.3 | Fine-Tuning with Minimal Data | PENDING | — | — |
-| Phase 6.1 | GNNExplainer Integration | PENDING | — | — |
+| Phase 6.1 | GNNExplainer Integration | IN PROGRESS | gnn_explainer.py | Creating GNNExplainer integration |
 | Phase 6.2 | Counterfactual Explanations | PENDING | — | — |
 | Phase 6.3 | Replace RF/DT Proxy | PENDING | — | — |
 
