@@ -71,21 +71,21 @@ class DepthCircuitGenerator:
 
     def generate_depth_4(self, n_exprs):
         """Generate depth-4 expressions.
-        Structure: (shared1 * shared2) + (shared3 * shared4)
-        where shared = sum of 2 vars each → depth 4
+        
+        True depth-4 structure: a * (b * (c * (d + e))) 
+        where d+e=1, c*(d+e)=2, b*(c*(d+e))=3, a*(b*(c*(d+e)))=4
+        
+        Also includes variants with an added term: a*(b*(c*(d+e))) + f = depth 5
+        So for true depth-4 we use just the nested multiplication chain.
         """
         records = []
         for _ in range(n_exprs):
-            vs = self._sample_vars(8)
-            s1 = sp.Add(vs[0], vs[1], evaluate=False)
-            s2 = sp.Add(vs[2], vs[3], evaluate=False)
-            s3 = sp.Add(vs[4], vs[5], evaluate=False)
-            s4 = sp.Add(vs[6], vs[7], evaluate=False)
-            expr = sp.Add(
-                sp.Mul(s1, s2, evaluate=False),
-                sp.Mul(s3, s4, evaluate=False),
-                evaluate=False
-            )
+            vs = self._sample_vars(6)
+            # a * (b * (c * (d + e))) → true depth 4
+            inner = sp.Add(vs[3], vs[4], evaluate=False)  # d+e: depth 1
+            level2 = sp.Mul(vs[2], inner, evaluate=False)  # c*(d+e): depth 2
+            level3 = sp.Mul(vs[1], level2, evaluate=False)  # b*(c*(d+e)): depth 3
+            expr = sp.Mul(vs[0], level3, evaluate=False)  # a*(...): depth 4
             records.append({"expr": expr, "family": "depth4", "depth": 4})
         return records
 
